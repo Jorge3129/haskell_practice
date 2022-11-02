@@ -185,17 +185,13 @@ rmPrefix prefix str = drop (length prefix) str
 
 -- Задача 6.a -----------------------------------------
 isLeftDerivationS :: Grammar -> DerivationS -> Bool
-isLeftDerivationS gr sx = foldl (\res step -> 
-    let start = fst step
-        end = snd step
-    in res && any (\p -> derive p start == end) gr
+isLeftDerivationS gr sx = foldl (\res (start, end) -> 
+    res && any (\p -> derive p start == end) gr
   ) True (zipDerivation sx)
 
 derive :: Production -> String -> String
 derive p xs =
-  let withIndex = zipIndexOfFstNonT xs
-      nonTerm = fst withIndex
-      index = snd withIndex
+  let (nonTerm, index) = zipIndexOfFstNonT xs
       derived = if fst p == nonTerm then snd p else [nonTerm]
   in (take index xs) ++ derived ++ (drop (index + 1) xs)
 
@@ -208,13 +204,11 @@ zipDerivation sx = zip (take (length sx - 1) sx) (tail sx)
 
 -- Задача 6.b -----------------------------------------
 isLeftDerivationR :: Grammar -> DerivationR -> Bool
-isLeftDerivationR gr ix = fst (foldl (\acc ruleIndex -> 
+isLeftDerivationR gr ix = fst (foldl (\acc@(success, expr) ruleIndex -> 
     let rule = gr !! ruleIndex
-        success = fst acc
-        expr = snd acc
     in if not success then acc else
       let derived = derive rule expr 
-      in (success && derived /= expr, derived)
+      in (derived /= expr, derived)
   ) (True, getStart gr) ix)
 
 getStart :: Grammar -> String
