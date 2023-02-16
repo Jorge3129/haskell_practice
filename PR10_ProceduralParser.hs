@@ -1,35 +1,35 @@
 module PR10_ProceduralParser where
 
-import Text.ParserCombinators.Parsec
-import PR10_ProceduralLang
+import           PR10_ProceduralLang
+import           Text.ParserCombinators.Parsec
 
 -- UTILS
 number :: Parser Int
-number = do 
+number = do
   s <- option "" (string "-")
   ds <- many1 digit
-  return $ read (s ++ ds) 
+  return $ read (s ++ ds)
 
 infOp :: String -> (a -> a -> a) -> Parser (a -> a -> a)
 infOp x f = string x >> return f
 
 lexem :: Parser a -> Parser a
-lexem p = do { a <- p; spaces; return a}
+lexem p = do a <- p; spaces; return a
 
 reserved :: String -> Parser ()
-reserved s = do { _ <- string s; spaces }
+reserved s = do _ <- string s; spaces
 
 parens :: Parser a -> Parser a
-parens p = do {reserved "("; n <- lexem p; reserved ")"; return n} 
+parens p = do reserved "("; n <- lexem p; reserved ")"; return n
 
 int :: Parser Exp
-int = do {n <- lexem number; return (Const n)}
+int = do n <- lexem number; return (Const n)
 
 latinAlf :: String
-latinAlf = ['A'..'Z'] ++ ['a'..'z']
+latinAlf = ['A' .. 'Z'] ++ ['a' .. 'z']
 
 nums :: String
-nums = ['0'..'9']
+nums = ['0' .. '9']
 
 firstLetter :: String
 firstLetter = latinAlf
@@ -38,10 +38,10 @@ subseqLetter :: String
 subseqLetter = latinAlf ++ nums ++ "_$#@"
 
 idf :: Parser String
-idf = do 
+idf = do
   st <- oneOf firstLetter
   nx <- many (oneOf subseqLetter)
-  return (st:nx)
+  return (st : nx)
 
 idp :: Parser Exp
 idp = do
@@ -50,22 +50,26 @@ idp = do
 
 -- ARITHMETIC
 addopA, mulopA :: Parser (Exp -> Exp -> Exp)
-addopA = infOp "+" (OpApp Add) <|> (infOp "-"(OpApp Minus))
-mulopA = infOp "*"(OpApp Mul)
-cmpOpA = infOp "==" (OpApp Equal) 
-          <|> infOp "<" (OpApp Less)
+addopA = infOp "+" (OpApp Add) <|> infOp "-" (OpApp Minus)
+mulopA = infOp "*" (OpApp Mul)
+
+cmpOpA =
+  infOp "==" (OpApp Equal)
+    <|> infOp "<" (OpApp Less)
 
 -- EXPRESSIONS
 exprA, termA, factorA :: Parser Exp
 factorA = int <|> try funcApp <|> try indexExp <|> idp <|> parens exprA
 termA = chainl1 factorA (lexem mulopA)
+
 eqTermA = chainl1 termA (lexem addopA)
+
 exprA = condExp (chainl1 eqTermA (lexem cmpOpA))
 
 condExp :: Parser Exp -> Parser Exp
 condExp p = do
-    expr <- p
-    cond expr <|> return expr
+  expr <- p
+  cond expr <|> return expr
   where
     cond expr = do
       reserved "?"
@@ -77,8 +81,7 @@ condExp p = do
 funcApp :: Parser Exp
 funcApp = do
   nm <- lexem idf
-  args <- callArgs
-  return (FunApp nm args)
+  FunApp nm <$> callArgs
 
 indexOp :: Parser Exp
 indexOp = do
@@ -90,8 +93,7 @@ indexOp = do
 indexExp :: Parser Exp
 indexExp = do
   nm <- lexem idf
-  ix <- indexOp
-  return (OpApp Index (Var nm) ix)
+  OpApp Index (Var nm) <$> indexOp
 
 callArgs :: Parser [Exp]
 callArgs = parens (option [] (commaSep exprA))
@@ -100,28 +102,30 @@ varDef :: Parser VarDef
 varDef = do
   nm <- idf
   mbA <- optionMaybe (string "[]")
-  return (case mbA of
-    Nothing -> (Int nm)
-    (Just _) -> (Arr nm))
+  return
+    ( case mbA of
+        Nothing  -> Int nm
+        (Just _) -> Arr nm
+    )
 
 -- SEQUENCE
 data SeqEx a = Lit a | Seq (SeqEx a) (SeqEx a)
 
 seqToList :: SeqEx a -> [a]
-seqToList (Lit x) = [x]
+seqToList (Lit x)   = [x]
 seqToList (Seq x y) = seqToList x ++ seqToList y
 
 commaSep :: Parser a -> Parser [a]
 commaSep p = do
-  seq <- chainl1 (Lit <$> (lexem p)) (lexem (infOp "," Seq))
+  seq <- chainl1 (Lit <$> lexem p) (lexem (infOp "," Seq))
   return (seqToList seq)
 
 commaSepOpt :: Parser a -> Parser [a]
-commaSepOpt p = option [] (commaSep p) 
+commaSepOpt p = option [] (commaSep p)
 
 -- STATEMENTS
 semicolon :: Parser a -> Parser a
-semicolon p = do { v <- lexem p; reserved ";"; return v}
+semicolon p = do v <- lexem p; reserved ";"; return v
 
 statement :: Parser Stmt
 statement = try whileSt <|> try callSt <|> assignSt <|> blockSt
@@ -132,23 +136,23 @@ assignSt = do
   mbIx <- optionMaybe indexOp
   reserved "="
   ex <- exprA
-  return (case mbIx of
-    Nothing -> Assign nm ex
-    (Just ix) -> AssignA nm ix ex)
+  return
+    ( case mbIx of
+        Nothing   -> Assign nm ex
+        (Just ix) -> AssignA nm ix ex
+    )
 
 whileSt :: Parser Stmt
 whileSt = do
   reserved "while"
   cnd <- parens exprA
-  sm <- statement
-  return (While cnd sm)
+  While cnd <$> statement
 
 callSt :: Parser Stmt
 callSt = do
   reserved "call"
   nm <- lexem idf
-  args <- callArgs
-  return (Call nm args)
+  Call nm <$> callArgs
 
 blockSt :: Parser Stmt
 blockSt = do
@@ -178,7 +182,7 @@ procDef = do
   return (nm, (vars, sm))
 
 full :: Parser a -> Parser a
-full p = do { _ <- spaces; v <- p; eof; return v}
+full p = do _ <- spaces; v <- p; eof; return v
 
 -- TESTS
 dfSumA :: String
@@ -191,25 +195,28 @@ dpGAdd :: String
 dpGAdd = "proc gAdd(x,y) gSum = x + y "
 
 dpSumA1 :: String
-dpSumA1 = "proc sumA1(a[],n) {i;limit;"
-        ++ "sA=0; i=0; limit=n+1;"
-        ++ "while (i<limit){sA=sA+a[i]; i=i+1}"
-        ++ "}"
+dpSumA1 =
+  "proc sumA1(a[],n) {i;limit;"
+    ++ "sA=0; i=0; limit=n+1;"
+    ++ "while (i<limit){sA=sA+a[i]; i=i+1}"
+    ++ "}"
 
 dPr1 :: String
-dPr1 = "gSum; "
-        ++ "proc gAdd(x,y) gSum = x + y "
-        ++ "proc main() call gAdd(5,10)   "
+dPr1 =
+  "gSum; "
+    ++ "proc gAdd(x,y) gSum = x + y "
+    ++ "proc main() call gAdd(5,10)   "
 
 dPr2 :: String
-dPr2 = "sA;"
-  ++"proc sumA1(a[],n) {i;limit;"
-  ++ "sA=0; i=0; limit=n+1;"
-  ++ "while (i<limit){sA=sA+a[i]; i=i+1}"
-  ++ "}"
-  ++ "proc main() {b[]; b[0]=9; b[2]=5; b[3]=7; b[5]=1;"
-  ++ "call sumA1 (b,5)"
-  ++ "}"
+dPr2 =
+  "sA;"
+    ++ "proc sumA1(a[],n) {i;limit;"
+    ++ "sA=0; i=0; limit=n+1;"
+    ++ "while (i<limit){sA=sA+a[i]; i=i+1}"
+    ++ "}"
+    ++ "proc main() {b[]; b[0]=9; b[2]=5; b[3]=7; b[5]=1;"
+    ++ "call sumA1 (b,5)"
+    ++ "}"
 
 prog :: Parser Program
 prog = do
@@ -219,9 +226,9 @@ prog = do
   return (vars, fns, procs)
 
 parseOrThrow :: Parser a -> String -> a
-parseOrThrow p str = 
-  case parse ((full) p) "" str of
-    (Left x) -> error (show x)
+parseOrThrow p str =
+  case parse (full p) "" str of
+    (Left x)  -> error (show x)
     (Right x) -> x
 
 -- parseOrThrow funcDef dfSumA == sumA
